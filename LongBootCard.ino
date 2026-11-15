@@ -318,7 +318,8 @@ void checkButton() {
     } else if (millis() - btnDownAt >= BUTTON_HOLD_MS) {
       Log.println("[BTN] 长按满 3 秒，清空 WiFi 配置并重启");
       setLedMode(LED_ON);
-      // 只清 WiFi，私钥和模式保留，重新配网时不用重填
+      // 只清 WiFi。私钥和模式保留，但配网页面要求重新填一次私钥，
+      // 这样保存时不会因为留空把原来的私钥悄悄清掉。
       cfg.wifiSSID[0] = 0;
       cfg.wifiPass[0] = 0;
       saveConfig();
@@ -766,20 +767,14 @@ void handleSave() {
     server.send(400, "application/json", "{\"ok\":false,\"msg\":\"端口应在 1-65535\"}");
     return;
   }
-  // 私钥和 MQTT 地址留空表示沿用板子里已经存好的值。
-  // 长按 3 秒只清 WiFi，这两项还在，重新配网时不用再翻一遍。
-  if (mode == 0) {
-    if (strlen(uid) == 0) {
-      if (cfg.bemfaUid[0] == 0) {
-        server.send(400, "application/json", "{\"ok\":false,\"msg\":\"请填写 32 位私钥\"}");
-        return;
-      }
-    } else if (strlen(uid) != 32) {
-      server.send(400, "application/json", "{\"ok\":false,\"msg\":\"私钥应为 32 位\"}");
-      return;
-    }
+  // 私钥和 MQTT 地址都要求重新填一次，不接受留空。
+  // 留空沿用旧值看着省事，实际用起来反而分不清到底用的是旧的还是新填的，
+  // 所以宁可多填一次，也要让用户明确知道自己填了什么。
+  if (mode == 0 && strlen(uid) != 32) {
+    server.send(400, "application/json", "{\"ok\":false,\"msg\":\"私钥应为 32 位\"}");
+    return;
   }
-  if (mode == 1 && strlen(mqttHost) == 0 && cfg.mqttHost[0] == 0) {
+  if (mode == 1 && strlen(mqttHost) == 0) {
     server.send(400, "application/json", "{\"ok\":false,\"msg\":\"请填写 MQTT 服务器地址\"}");
     return;
   }
@@ -789,16 +784,11 @@ void handleSave() {
   cfg.wifiSSID[sizeof(cfg.wifiSSID) - 1] = 0;
   strncpy(cfg.wifiPass, pass, sizeof(cfg.wifiPass) - 1);
   cfg.wifiPass[sizeof(cfg.wifiPass) - 1] = 0;
-  // 留空就保留板子里原来的值，别清掉
-  if (uid[0]) {
-    strncpy(cfg.bemfaUid, uid, sizeof(cfg.bemfaUid) - 1);
-    cfg.bemfaUid[sizeof(cfg.bemfaUid) - 1] = 0;
-  }
+  strncpy(cfg.bemfaUid, uid, sizeof(cfg.bemfaUid) - 1);
+  cfg.bemfaUid[sizeof(cfg.bemfaUid) - 1] = 0;
   cfg.mode = mode;
-  if (mqttHost[0]) {
-    strncpy(cfg.mqttHost, mqttHost, sizeof(cfg.mqttHost) - 1);
-    cfg.mqttHost[sizeof(cfg.mqttHost) - 1] = 0;
-  }
+  strncpy(cfg.mqttHost, mqttHost, sizeof(cfg.mqttHost) - 1);
+  cfg.mqttHost[sizeof(cfg.mqttHost) - 1] = 0;
   cfg.mqttPort = mqttPort;
   // 密码前后容易带空格（手机输入法、复制粘贴都会），统一去掉再存
   String wp = String(webPass);
