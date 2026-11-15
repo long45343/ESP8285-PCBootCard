@@ -36,9 +36,13 @@ function renderLog() {
   const el = document.getElementById('log');
   if (!el) return;
   if (state.paused) return;
-  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  // 记下"离底部还有多远"，而不是离顶部多远。
+  // 日志一直在增长，按顶部位置还原的话，用户正在看的那几行会往下漂走。
+  const fromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+  const atBottom = fromBottom < 40;
   el.textContent = state.logs.length ? state.logs.join('\n') : '(暂无日志)';
-  if (atBottom) el.scrollTop = el.scrollHeight;
+  // 换掉文本内容会把滚动条打回顶部，正在往上翻的人会被弹走，这里还原回去
+  el.scrollTop = atBottom ? el.scrollHeight : (el.scrollHeight - el.clientHeight - fromBottom);
 }
 
 function togglePause() {
@@ -49,7 +53,13 @@ function togglePause() {
 
 function clearLog() {
   state.logs = [];
-  renderLog();
+  const el = document.getElementById('log');
+  if (el) el.textContent = '(暂无日志)';
+  // 清完屏如果还继续往里面追加，日志立刻又长回来，等于白清。
+  // 所以顺手暂停，想接着看就点"继续滚动"。
+  state.paused = true;
+  const btn = document.getElementById('pauseBtn');
+  if (btn) btn.textContent = '继续滚动';
 }
 
 // ---------- 页面切换 ----------

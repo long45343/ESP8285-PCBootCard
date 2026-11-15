@@ -220,7 +220,7 @@ input::placeholder{color:var(--on-surface-variant);opacity:.7}
         <input type="text" id="uid" placeholder="32 位私钥" maxlength="32" autocomplete="off">
         <div class="hint">
           登录 <a href="https://cloud.bemfa.com/mdevice.php" target="_blank">巴法云 MQTT 控制台</a>，
-          首页即可看到私钥。三个主题会自动创建，不用手动建。
+          首页即可看到私钥。两个主题会自动创建，不用手动建。
         </div>
       </div>
     </div>

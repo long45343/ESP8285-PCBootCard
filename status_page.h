@@ -101,7 +101,7 @@ input[type=file]{
 }
 #bar{height:8px;background:var(--surface-container-high);border-radius:4px;overflow:hidden;margin-top:16px;display:none}
 #bar div{height:100%;width:0;background:var(--primary);transition:width .2s;border-radius:4px}
-#msg{font-size:13px;color:var(--on-surface-variant);margin-top:10px;min-height:20px}
+#msg,.msg{font-size:13px;color:var(--on-surface-variant);margin-top:10px;min-height:20px}
 
 /* WiFi 列表 */
 .wifi-item{
@@ -293,14 +293,18 @@ async function loadLog(){
     if(r.status===401){location.reload();return;}
     const t=await r.text();
     const el=document.getElementById('log');
-    const atBottom=el.scrollHeight-el.scrollTop-el.clientHeight<40;
+    // 记下"离底部还有多远"，而不是离顶部多远。
+    // 日志一直在增长，按顶部位置还原的话，用户正在看的那几行会往下漂走。
+    const fromBottom=el.scrollHeight-el.scrollTop-el.clientHeight;
+    const atBottom=fromBottom<40;
     el.textContent=t||'(暂无日志)';
-    if(atBottom)el.scrollTop=el.scrollHeight;
+    // 换掉文本内容会把滚动条打回顶部，正在往上翻的人会被弹走，这里还原回去
+    el.scrollTop=atBottom?el.scrollHeight:(el.scrollHeight-el.clientHeight-fromBottom);
   }catch(e){}
 }
 
 async function doLogout(){
-  await fetch('/logout');
+  try{ await fetch('/logout'); }catch(e){}
   location.reload();
 }
 
@@ -461,12 +465,22 @@ function togglePause(){
   document.getElementById('pauseBtn').textContent=paused?'继续滚动':'暂停滚动';
 }
 
-function clearLog(){document.getElementById('log').textContent='';}
+function clearLog(){
+  document.getElementById('log').textContent='';
+  // 清完屏如果还继续每 2 秒去拉一次，日志立刻又被填满，等于白清。
+  // 所以顺手暂停，想接着看就点"继续滚动"。
+  if(!paused){
+    paused=true;
+    document.getElementById('pauseBtn').textContent='继续滚动';
+  }
+}
 
 async function doRestart(){
   if(!confirm('确定重启设备？'))return;
-  await fetch('/api/restart');
+  // 先把提示写上去再发请求。设备一收到就重启，这个请求多半收不到回复，
+  // 等它返回再写提示就来不及了。
   document.getElementById('msg').textContent='设备正在重启，稍等几秒刷新页面';
+  try{ await fetch('/api/restart'); }catch(e){}
 }
 
 // ---------- 切换连接方式 ----------

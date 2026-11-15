@@ -132,8 +132,10 @@ PubSubClient mqtt(net);
 
 bool apMode = false;
 bool lastPowerState = false;
+bool stateReported = false;          // 这次启动后有没有把状态发出去过
 unsigned long lastStatusCheck = 0;
 unsigned long lastMqttRetry = 0;
+unsigned long mqttRetryGap = 5000;   // MQTT 重连间隔，连不上就翻倍，最长 60 秒
 
 // 待回发的消息。
 // MQTT 回调是在“正在收数据”的那一刻被调用的，这时候往同一条连接写数据，
@@ -167,11 +169,14 @@ void loadConfig() {
   // 旧固件没有 webPass 这个字段，升级后这里读到的是 Flash 里的残留字节。
   // 只认可见 ASCII，碰到乱码就清空，免得莫名其妙被锁在门外。
   bool badPass = false;
+  bool terminated = false;
   for (unsigned int i = 0; i < sizeof(cfg.webPass); i++) {
     char c = cfg.webPass[i];
-    if (c == 0) break;
+    if (c == 0) { terminated = true; break; }
     if (c < 0x20 || c > 0x7E) { badPass = true; break; }
   }
+  // 33 个字节全被占满、结尾没有 0，后面当字符串用就会读到数组外面去
+  if (!terminated) badPass = true;
   if (badPass) {
     cfg.webPass[0] = 0;
     EEPROM.put(CONFIG_ADDR, cfg);
@@ -430,6 +435,10 @@ void ensureTopics() {
   if (cfg.mode != 0) return;          // HA 模式不需要巴法云主题
   if (cfg.bemfaUid[0] == 0) return;
 
+  // 巴法云连不上时别死等。这里先设好超时，最坏也就卡几秒；
+  // 不设的话用的是默认值，可能十几秒，那段时间网页打不开。
+  net.setTimeout(2000);
+
   // 两个主题：开关机开关、重启开关。开关机那个兼做状态显示。
   bemfaCreateTopic(cfg.topicPower, 1, "开/关机");
   delay(500);
@@ -596,14 +605,37 @@ void onMqttMessage(char* topic, byte* payload, unsigned int len) {
 // ============================================================
 // 10. MQTT 连接
 // ============================================================
+// 把 PubSubClient 的错误码翻译成人话，排查时不用再查表
+const char* mqttStateName(int s) {
+  switch (s) {
+    case -4: return "连接超时";
+    case -3: return "连接丢失";
+    case -2: return "TCP 连不上";
+    case -1: return "未连接";
+    case  0: return "已连接";
+    case  1: return "协议版本不支持";
+    case  2: return "客户端 ID 被拒";
+    case  3: return "服务器不可用";
+    case  4: return "用户名或密码错";
+    case  5: return "未授权";
+    default: return "未知";
+  }
+}
+
 void connectMqtt() {
   mqtt.setCallback(onMqttMessage);
   mqtt.setKeepAlive(60);
+  // 连不上时别死等。默认超时太长了，服务器不可达时每次重连会卡住
+  // 主循环好几秒，网页请求全被堵住，表现就是"网页打不开"。
+  net.setTimeout(2000);
+
   // 缓冲区只需要分配一次。每次重连都调 setBufferSize 会触发 realloc，
   // 堆紧张的时候还可能挪动内存，完全没必要。
   static bool bufferReady = false;
   if (!bufferReady) {
-    mqtt.setBufferSize(768);
+    if (!mqtt.setBufferSize(768)) {
+      Log.println("[MQTT] 缓冲区分配失败");
+    }
     bufferReady = true;
   }
 
@@ -620,13 +652,20 @@ void connectMqtt() {
       Log.printf("[MQTT] 订阅 %s / %s %s\n", cfg.topicPower, cfg.topicReset,
                  (s1 && s2) ? "成功" : "失败");
       setLedMode(LED_OFF);
+
+      // 连上后立即同步一次当前状态，避免云端显示的状态和实际不一致
+      bool cur = readPowerState();
+      lastPowerState = cur;
+      stateReported = true;
+      reportState(cur);
     } else {
-      Log.printf("失败 rc=%d\n", mqtt.state());
+      Log.printf("失败 rc=%d (%s)\n", mqtt.state(), mqttStateName(mqtt.state()));
       setLedMode(LED_ON);
     }
   } else {
     // ---------- Home Assistant ----------
     mqtt.setServer(cfg.mqttHost, cfg.mqttPort);
+
     Log.printf("[MQTT] 连接 HA %s:%d...", cfg.mqttHost, cfg.mqttPort);
     if (mqtt.connect(HA_UNIQUE_ID, nullptr, nullptr,
                      haTopicAvailability, 0, true, "offline")) {
@@ -638,8 +677,16 @@ void connectMqtt() {
       Log.printf("[MQTT] 订阅 %s / %s %s\n", haTopicPowerCmd, haTopicResetCmd,
                  (s1 && s2) ? "成功" : "失败");
       setLedMode(LED_OFF);
+
+      // 连上后立即同步一次当前状态。
+      // 首次配对时 HA 刚创建实体，需要一条状态消息把初始值填上。
+      // 如果不主动发，要等用户开关机一次才会更新。
+      bool cur = readPowerState();
+      lastPowerState = cur;
+      stateReported = true;
+      reportState(cur);
     } else {
-      Log.printf("失败 rc=%d\n", mqtt.state());
+      Log.printf("失败 rc=%d (%s)\n", mqtt.state(), mqttStateName(mqtt.state()));
       setLedMode(LED_ON);
     }
   }
@@ -855,9 +902,9 @@ void handleApiStatus() {
   doc["power"]  = lastPowerState;
   doc["heap"]   = ESP.getFreeHeap();
   doc["ssid"]   = WiFi.SSID();
-  // WiFi 名字可能是中文，一个汉字占 3 字节，32 字符最多 96 字节，
-  // 256 的余量偏紧，给到 320。
-  char out[320];
+  // WiFi 名字可能是中文。序列化成 JSON 时每个汉字会变成 \uXXXX 六个字节，
+  // 32 个汉字就是 192 字节，再加上其他字段，320 不够用，给到 512。
+  char out[512];
   serializeJson(doc, out, sizeof(out));
   server.send(200, "application/json", out);
 }
@@ -1223,6 +1270,9 @@ void loop() {
 
   if (WiFi.status() != WL_CONNECTED) {
     setLedMode(LED_ON);
+    // WiFi 都断了，MQTT 的重连间隔没必要继续翻倍。
+    // 重置回默认值，等 WiFi 恢复后能马上重连，而不是干等一分钟。
+    mqttRetryGap = 5000;
     // 不阻塞，只限制日志频率，让 LED 和按键继续工作
     static unsigned long lastWarn = 0;
     if (millis() - lastWarn > 5000) {
@@ -1233,9 +1283,17 @@ void loop() {
   }
 
   if (!mqtt.connected()) {
-    if (millis() - lastMqttRetry > 5000) {
+    // 连不上就慢慢退，别每 5 秒死磕一次。
+    // 服务器长时间不可达时，频繁重连会把主循环反复卡住，网页跟着打不开。
+    if (millis() - lastMqttRetry > mqttRetryGap) {
       lastMqttRetry = millis();
       connectMqtt();
+      if (mqtt.connected()) {
+        mqttRetryGap = 5000;              // 连上了，恢复默认间隔
+      } else {
+        mqttRetryGap *= 2;                // 连不上，间隔翻倍
+        if (mqttRetryGap > 60000) mqttRetryGap = 60000;   // 封顶 60 秒
+      }
     }
   } else {
     mqtt.loop();
@@ -1265,14 +1323,15 @@ void loop() {
     lastStatusCheck = millis();
     static int stableCount = 0;
     static bool lastRead = false;
-    static bool firstReport = true;
     bool cur = readPowerState();
     if (cur == lastRead) {
       if (stableCount < 5) stableCount++;
-      // 启动后第一次稳定检测也上报一次，保证云端跟实际状态一致
-      if (stableCount == 5 && (cur != lastPowerState || firstReport)) {
+      // 状态变了要报；这次启动还没报过也要报一次，保证云端跟实际一致。
+      // 这里不能用"启动后第一次"的局部标志：MQTT 连上时已经报过一次，
+      // 再报就是重复消息。
+      if (stableCount == 5 && (cur != lastPowerState || !stateReported)) {
         lastPowerState = cur;
-        firstReport = false;
+        stateReported = true;
         reportState(cur);
       }
     } else {

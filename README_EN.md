@@ -15,7 +15,7 @@ The demo is a pure front-end simulation and does not connect to any real device.
 - **Remote power on/off and reset**: Controls Power_SW and Reset_SW remotely, and still works when the PC is frozen
 - **Status reporting**: The PC power state is reported back to Bemfa Cloud / HA
 - **Web-based WiFi setup**: Connect to the board's hotspot, open the web page and enter your WiFi password — no code changes needed
-- **Web maintenance**: On the same LAN, open the board's web page to view logs, update firmware, switch WiFi, and change the access password
+- **Web maintenance**: On the same LAN, open the board's web page to view logs, update firmware, switch WiFi, change the access password, and switch between Bemfa Cloud and Home Assistant
 - **Status LED**: Slow blink during setup, fast blink while connecting, off when normal, solid on when there is a problem
 
 ## Hardware
@@ -134,10 +134,11 @@ When the board and your phone are on the same WiFi, open `http://pcboot.local` o
 From this page you can:
 
 - View device status (WiFi signal, MQTT connection, PC power state, free memory)
-- View runtime logs (roughly the last 25 minutes)
+- View runtime logs (the last 3KB is kept in RAM, roughly half an hour of normal operation)
 - Upload a `.bin` file to update the firmware
 - Scan for nearby WiFi networks and switch
 - Change the web access password
+- Switch between Bemfa Cloud and Home Assistant without opening the case to press the button
 
 ## About Bemfa Cloud
 
@@ -168,5 +169,5 @@ Power is a button rather than a switch because physically it is a "press", not a
 |---|---|
 | `LongBootCard.ino` | Main program: WiFi setup, MQTT, button control, state detection, web server |
 | `web_page.h` | WiFi setup page |
-| `status_page.h` | Runtime status page (logs, OTA, WiFi switching, password change) |
+| `status_page.h` | Runtime status page (logs, OTA, WiFi switching, password change, mode switching) |
 | `login_page.h` | Login page |

@@ -293,7 +293,7 @@ input[type=file]{
 }
 #bar{height:8px;background:var(--surface-container-high);border-radius:4px;overflow:hidden;margin-top:16px;display:none}
 #bar div{height:100%;width:0;background:var(--primary);transition:width .2s;border-radius:4px}
-#msg{font-size:13px;color:var(--on-surface-variant);margin-top:10px;min-height:20px}
+#msg,.msg{font-size:13px;color:var(--on-surface-variant);margin-top:10px;min-height:20px}
 
 /* ---------- 模拟设备面板 ---------- */
 .sim-panel{
