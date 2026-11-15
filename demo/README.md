@@ -26,9 +26,11 @@ python -m http.server 8000
 
 这个目录是纯静态文件，可以直接用 GitHub Pages 托管。
 
-注意 Pages 的「分支部署」只认仓库根目录和 `/docs` 两个位置，放在 `/demo` 是选不到的。所以这里走 GitHub Actions：仓库里已经带了一份 `.github/workflows/pages.yml`，它会把 `demo` 目录打包发布。
+仓库现在的做法是把 Pages 的来源设成 `main` 分支的根目录：根目录的 `README.md` 会被渲染成首页，`demo` 子目录作为静态文件一起发布，所以演示地址是 `https://<用户名>.github.io/<仓库名>/demo/`。
 
-在仓库的 Settings → Pages 里，把 Source 选成 **GitHub Actions**，之后每次推送到 `main` 都会自动更新，几秒后就能通过 `https://<用户名>.github.io/<仓库名>/` 访问。
+有个容易踩的地方：Pages 的「分支部署」下拉框只提供根目录和 `/docs` 两个选项，选不到 `/demo`。但这只是说不能把 `/demo` 单独设成站点根，选根目录之后仓库里的子目录照样能访问，不需要把 demo 挪到别的位置。
+
+如果想让演示直接占据站点根（打开 `https://<用户名>.github.io/<仓库名>/` 就是演示页面），可以改成 GitHub Actions 部署：仓库里已经带了 `.github/workflows/pages.yml`，把 Settings → Pages 的 Source 切成 **GitHub Actions** 即可。
 
 ## 说明
 
