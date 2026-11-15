@@ -1,6 +1,6 @@
 # 简介
 
-在ESP8285上开发的兼容巴法云和Home Assistant（HA）的开机卡固件，Home Assistant未经充分测试
+在ESP8285上开发的兼容巴法云和Home Assistant（HA）的开机卡固件
 
 ## 在线演示
 
