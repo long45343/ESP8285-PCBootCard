@@ -766,11 +766,20 @@ void handleSave() {
     server.send(400, "application/json", "{\"ok\":false,\"msg\":\"端口应在 1-65535\"}");
     return;
   }
-  if (mode == 0 && strlen(uid) != 32) {
-    server.send(400, "application/json", "{\"ok\":false,\"msg\":\"私钥应为 32 位\"}");
-    return;
+  // 私钥和 MQTT 地址留空表示沿用板子里已经存好的值。
+  // 长按 3 秒只清 WiFi，这两项还在，重新配网时不用再翻一遍。
+  if (mode == 0) {
+    if (strlen(uid) == 0) {
+      if (cfg.bemfaUid[0] == 0) {
+        server.send(400, "application/json", "{\"ok\":false,\"msg\":\"请填写 32 位私钥\"}");
+        return;
+      }
+    } else if (strlen(uid) != 32) {
+      server.send(400, "application/json", "{\"ok\":false,\"msg\":\"私钥应为 32 位\"}");
+      return;
+    }
   }
-  if (mode == 1 && strlen(mqttHost) == 0) {
+  if (mode == 1 && strlen(mqttHost) == 0 && cfg.mqttHost[0] == 0) {
     server.send(400, "application/json", "{\"ok\":false,\"msg\":\"请填写 MQTT 服务器地址\"}");
     return;
   }
@@ -780,11 +789,16 @@ void handleSave() {
   cfg.wifiSSID[sizeof(cfg.wifiSSID) - 1] = 0;
   strncpy(cfg.wifiPass, pass, sizeof(cfg.wifiPass) - 1);
   cfg.wifiPass[sizeof(cfg.wifiPass) - 1] = 0;
-  strncpy(cfg.bemfaUid, uid, sizeof(cfg.bemfaUid) - 1);
-  cfg.bemfaUid[sizeof(cfg.bemfaUid) - 1] = 0;
+  // 留空就保留板子里原来的值，别清掉
+  if (uid[0]) {
+    strncpy(cfg.bemfaUid, uid, sizeof(cfg.bemfaUid) - 1);
+    cfg.bemfaUid[sizeof(cfg.bemfaUid) - 1] = 0;
+  }
   cfg.mode = mode;
-  strncpy(cfg.mqttHost, mqttHost, sizeof(cfg.mqttHost) - 1);
-  cfg.mqttHost[sizeof(cfg.mqttHost) - 1] = 0;
+  if (mqttHost[0]) {
+    strncpy(cfg.mqttHost, mqttHost, sizeof(cfg.mqttHost) - 1);
+    cfg.mqttHost[sizeof(cfg.mqttHost) - 1] = 0;
+  }
   cfg.mqttPort = mqttPort;
   // 密码前后容易带空格（手机输入法、复制粘贴都会），统一去掉再存
   String wp = String(webPass);

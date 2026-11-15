@@ -217,10 +217,11 @@ input::placeholder{color:var(--on-surface-variant);opacity:.7}
     <div id="bemfaFields">
       <div class="field">
         <label for="uid">私钥（UID）</label>
-        <input type="text" id="uid" placeholder="32 位私钥" maxlength="32" autocomplete="off">
+        <input type="text" id="uid" placeholder="32 位私钥，留空沿用已保存的" maxlength="32" autocomplete="off">
         <div class="hint">
           登录 <a href="https://cloud.bemfa.com/mdevice.php" target="_blank">巴法云 MQTT 控制台</a>，
           首页即可看到私钥。两个主题会自动创建，不用手动建。
+          重新配网时这一栏留空就行，原来的私钥还在板子里。
         </div>
       </div>
     </div>
@@ -228,7 +229,7 @@ input::placeholder{color:var(--on-surface-variant);opacity:.7}
     <div id="haFields" style="display:none">
       <div class="field">
         <label for="mqttHost">MQTT 服务器</label>
-        <input type="text" id="mqttHost" placeholder="例如 192.168.1.100" autocomplete="off">
+        <input type="text" id="mqttHost" placeholder="例如 192.168.1.100，留空沿用已保存的" autocomplete="off">
       </div>
       <div class="field">
         <label for="mqttPort">端口</label>
@@ -308,8 +309,9 @@ async function save(){
   const webPass=document.getElementById('webPass').value;
 
   if(!ssid){showStatus('请选择 WiFi','err');return}
-  if(mode===0&&(!uid||uid.length!==32)){showStatus('私钥应为 32 位','err');return}
-  if(mode===1&&!mqttHost){showStatus('请填写 MQTT 服务器地址','err');return}
+  // 私钥留空表示沿用板子里已经存好的值，只有填了才检查长度。
+  // MQTT 地址同理，交给服务端判断板子里到底有没有。
+  if(mode===0&&uid&&uid.length!==32){showStatus('私钥应为 32 位','err');return}
 
   const btn=document.getElementById('saveBtn');
   btn.disabled=true;

@@ -123,7 +123,7 @@ The ESP32, ESP32-S2, ESP32-S3, ESP32-C3 and ESP32-C6 all work, but the underlyin
 1. On first power-up, or after holding the onboard button for 3 seconds, the board opens a hotspot named `PCBoot-XXXX`
 2. Connect to this hotspot; the setup page should pop up automatically (if not, open `192.168.4.1` manually)
 3. Select your WiFi, enter the password, then choose the control mode:
-   - **Bemfa Cloud**: Enter your 32-character private key; the two switch topics are created automatically
+   - **Bemfa Cloud**: Enter your 32-character private key; the two switch topics are created automatically. When re-running setup you can leave this blank — the saved key is still on the board
    - **Home Assistant**: Enter the MQTT server address and port; three entities are registered automatically
 4. Click Save; the board reboots and connects
 
