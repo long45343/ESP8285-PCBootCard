@@ -20,13 +20,13 @@
 python -m http.server 8000
 ```
 
-然后访问 `http://localhost:8000/demo/`。
+然后访问 `http://localhost:8000/docs/`。
 
 ## 部署到 GitHub Pages
 
 这个目录是纯静态文件，可以直接用 GitHub Pages 托管。
 
-在仓库设置里把 Pages 的来源设成 `main` 分支的 `/demo` 目录，几秒后就能通过 `https://<用户名>.github.io/<仓库名>/` 访问。
+在仓库设置里把 Pages 的来源设成 `main` 分支的 `/docs` 目录，几秒后就能通过 `https://<用户名>.github.io/<仓库名>/` 访问。
 
 ## 说明
 
