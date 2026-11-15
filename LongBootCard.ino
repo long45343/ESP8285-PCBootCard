@@ -1015,6 +1015,63 @@ void handleApiPass() {
   server.send(200, "application/json", "{\"ok\":true}");
 }
 
+// 网页上直接切换巴法云 / HA，省得为了进配网去拆机箱按按键。
+// 切到哪个模式，就顺带把那个模式要用的参数一起存好。
+void handleApiMode() {
+  if (!checkAuth()) {
+    server.send(401, "application/json", "{\"ok\":false,\"msg\":\"未登录\"}");
+    return;
+  }
+  if (!server.hasArg("plain")) {
+    server.send(400, "application/json", "{\"ok\":false,\"msg\":\"无数据\"}");
+    return;
+  }
+  StaticJsonDocument<384> doc;
+  if (deserializeJson(doc, server.arg("plain"))) {
+    server.send(400, "application/json", "{\"ok\":false,\"msg\":\"格式错误\"}");
+    return;
+  }
+
+  int mode = doc["mode"] | -1;
+  if (mode != 0 && mode != 1) {
+    server.send(400, "application/json", "{\"ok\":false,\"msg\":\"模式无效\"}");
+    return;
+  }
+
+  if (mode == 0) {
+    // 切到巴法云，私钥是必填的
+    const char* uid = doc["bemfaUid"] | "";
+    if (strlen(uid) != 32) {
+      server.send(400, "application/json", "{\"ok\":false,\"msg\":\"私钥应为 32 位\"}");
+      return;
+    }
+    strncpy(cfg.bemfaUid, uid, sizeof(cfg.bemfaUid) - 1);
+    cfg.bemfaUid[sizeof(cfg.bemfaUid) - 1] = 0;
+  } else {
+    // 切到 HA，MQTT 服务器地址是必填的
+    const char* host = doc["mqttHost"] | "";
+    int port = doc["mqttPort"] | 1883;
+    if (strlen(host) == 0) {
+      server.send(400, "application/json", "{\"ok\":false,\"msg\":\"请填写 MQTT 服务器地址\"}");
+      return;
+    }
+    if (port < 1 || port > 65535) {
+      server.send(400, "application/json", "{\"ok\":false,\"msg\":\"端口应在 1-65535\"}");
+      return;
+    }
+    strncpy(cfg.mqttHost, host, sizeof(cfg.mqttHost) - 1);
+    cfg.mqttHost[sizeof(cfg.mqttHost) - 1] = 0;
+    cfg.mqttPort = port;
+  }
+
+  cfg.mode = mode;
+  saveConfig();
+  Log.printf("[CFG] 切换到 %s 模式，准备重启\n", mode == 0 ? "巴法云" : "HA");
+  server.send(200, "application/json", "{\"ok\":true}");
+  delay(500);
+  ESP.restart();
+}
+
 // OTA 自己接管，为的是能在写 Flash 之前先验一次密码。
 // 不自己写的话，固件库注册的路由没法插鉴权。
 bool otaAuthorized = false;
@@ -1077,6 +1134,7 @@ void setupWebServer() {
   server.on("/api/scanResult", handleApiScanResult);
   server.on("/api/wifi", HTTP_POST, handleApiWifi);
   server.on("/api/pass", HTTP_POST, handleApiPass);
+  server.on("/api/mode", HTTP_POST, handleApiMode);
   server.on("/update", HTTP_POST, handleOtaDone, handleOtaData);
   server.begin();
 

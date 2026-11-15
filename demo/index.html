@@ -125,6 +125,31 @@
     </div>
 
     <div class="card">
+      <h2>连接方式</h2>
+      <div class="row"><span>当前模式</span><span id="curMode">-</span></div>
+      <div class="btns">
+        <button class="btn ghost" id="modeBtn" onclick="toggleModeForm()">切换模式</button>
+      </div>
+      <div id="modeForm" class="picker" style="display:none">
+        <div class="picker-head">
+          <div class="picker-ssid" id="modeTarget">-</div>
+        </div>
+        <div id="modeBemfaFields" style="display:none">
+          <input type="text" id="modeUid" placeholder="32 位私钥" maxlength="32">
+        </div>
+        <div id="modeHaFields" style="display:none">
+          <input type="text" id="modeHost" placeholder="MQTT 服务器地址，例如 192.168.1.100">
+          <input type="number" id="modePort" placeholder="端口" value="1883" style="margin-top:8px">
+        </div>
+        <div class="btns">
+          <button class="btn" onclick="doSwitchMode()">切换并重启</button>
+          <button class="btn ghost" onclick="cancelMode()">取消</button>
+        </div>
+      </div>
+      <div id="modeMsg" class="msg"></div>
+    </div>
+
+    <div class="card">
       <h2>网络设置</h2>
       <div class="row"><span>当前网络</span><span id="stSsid">-</span></div>
       <div class="btns">

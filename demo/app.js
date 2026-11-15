@@ -13,6 +13,7 @@ const state = {
   heap: 32000,
   webPass: 'demo123',
   loggedIn: false,
+  mode: 0,               // 0=巴法云 1=HA
   press: -1,             // -1 空闲，12 电源键，13 重启键
   logs: [],
   scanning: false,
@@ -195,6 +196,7 @@ function refreshStatus() {
   set('stUptime', fmtUptime(state.uptime));
   set('stHeap', (state.heap / 1024).toFixed(1) + ' KB');
   set('stSsid', state.wifi || '-');
+  set('curMode', state.mode === 0 ? '巴法云' : 'Home Assistant');
 }
 
 let pickedSsid = '';
@@ -343,6 +345,59 @@ function doRestart() {
     state.uptime = 0;
     refreshStatus();
   }, 2000);
+}
+
+// ---------- 切换连接方式 ----------
+let targetMode = -1;
+
+function toggleModeForm() {
+  if (targetMode !== -1) { cancelMode(); return; }
+  targetMode = state.mode === 0 ? 1 : 0;
+  document.getElementById('modeTarget').textContent =
+    targetMode === 0 ? '切换到巴法云' : '切换到 Home Assistant';
+  document.getElementById('modeBemfaFields').style.display = targetMode === 0 ? 'block' : 'none';
+  document.getElementById('modeHaFields').style.display = targetMode === 1 ? 'block' : 'none';
+  document.getElementById('modeForm').style.display = 'block';
+  document.getElementById('modeMsg').textContent = '';
+  document.getElementById('modeBtn').textContent = '取消切换';
+}
+
+function cancelMode() {
+  targetMode = -1;
+  document.getElementById('modeForm').style.display = 'none';
+  document.getElementById('modeMsg').textContent = '';
+  document.getElementById('modeBtn').textContent = '切换模式';
+}
+
+function doSwitchMode() {
+  const msg = document.getElementById('modeMsg');
+  if (targetMode === -1) return;
+
+  if (targetMode === 0) {
+    const uid = document.getElementById('modeUid').value.trim();
+    if (uid.length !== 32) { msg.textContent = '私钥应为 32 位'; return; }
+  } else {
+    const host = document.getElementById('modeHost').value.trim();
+    if (!host) { msg.textContent = '请填写 MQTT 服务器地址'; return; }
+  }
+
+  const tip = targetMode === 0
+    ? '确定切换到巴法云并重启？切换后设备会断开当前连接。'
+    : '确定切换到 Home Assistant 并重启？切换后设备会断开当前连接。';
+  if (!confirm(tip)) return;
+
+  msg.textContent = '正在保存...';
+  const newMode = targetMode;
+  setTimeout(() => {
+    state.mode = newMode;
+    state.mqtt = true;
+    msg.textContent = '已保存，设备正在重启并切换到新模式';
+    addLog('[CFG] 切换到 ' + (newMode === 0 ? '巴法云' : 'HA') + ' 模式，准备重启');
+    setTimeout(() => {
+      cancelMode();
+      refreshStatus();
+    }, 1500);
+  }, 800);
 }
 
 function doLogout() {

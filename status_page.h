@@ -170,6 +170,31 @@ input[type=file]{
 </div>
 
 <div class="card">
+  <h2>连接方式</h2>
+  <div class="row"><span>当前模式</span><span id="curMode">-</span></div>
+  <div class="btns">
+    <button class="btn ghost" id="modeBtn" onclick="toggleModeForm()">切换模式</button>
+  </div>
+  <div id="modeForm" class="picker" style="display:none">
+    <div class="picker-head">
+      <div class="picker-ssid" id="modeTarget">-</div>
+    </div>
+    <div id="modeBemfaFields" style="display:none">
+      <input type="text" id="modeUid" placeholder="32 位私钥" maxlength="32">
+    </div>
+    <div id="modeHaFields" style="display:none">
+      <input type="text" id="modeHost" placeholder="MQTT 服务器地址，例如 192.168.1.100">
+      <input type="number" id="modePort" placeholder="端口" value="1883" style="margin-top:8px">
+    </div>
+    <div class="btns">
+      <button class="btn" onclick="doSwitchMode()">切换并重启</button>
+      <button class="btn ghost" onclick="cancelMode()">取消</button>
+    </div>
+  </div>
+  <div id="modeMsg" class="msg"></div>
+</div>
+
+<div class="card">
   <h2>网络设置</h2>
   <div class="row"><span>当前网络</span><span id="curSsid">-</span></div>
   <div class="btns">
@@ -256,6 +281,8 @@ async function refresh(){
     document.getElementById('uptime').textContent=fmt(d.uptime);
     document.getElementById('heap').textContent=(d.heap/1024).toFixed(1)+' KB';
     document.getElementById('curSsid').textContent=d.ssid||'-';
+    currentMode=d.mode||0;
+    document.getElementById('curMode').textContent=currentMode===0?'巴法云':'Home Assistant';
   }catch(e){}
 }
 
@@ -440,6 +467,69 @@ async function doRestart(){
   if(!confirm('确定重启设备？'))return;
   await fetch('/api/restart');
   document.getElementById('msg').textContent='设备正在重启，稍等几秒刷新页面';
+}
+
+// ---------- 切换连接方式 ----------
+let currentMode=0;
+let targetMode=-1;
+
+function toggleModeForm(){
+  if(targetMode!==-1){cancelMode();return;}
+  targetMode=currentMode===0?1:0;
+  document.getElementById('modeTarget').textContent=
+    targetMode===0?'切换到巴法云':'切换到 Home Assistant';
+  document.getElementById('modeBemfaFields').style.display=targetMode===0?'block':'none';
+  document.getElementById('modeHaFields').style.display=targetMode===1?'block':'none';
+  document.getElementById('modeForm').style.display='block';
+  document.getElementById('modeMsg').textContent='';
+  document.getElementById('modeBtn').textContent='取消切换';
+}
+
+function cancelMode(){
+  targetMode=-1;
+  document.getElementById('modeForm').style.display='none';
+  document.getElementById('modeMsg').textContent='';
+  document.getElementById('modeBtn').textContent='切换模式';
+}
+
+async function doSwitchMode(){
+  const msg=document.getElementById('modeMsg');
+  if(targetMode===-1)return;
+
+  const body={mode:targetMode};
+  if(targetMode===0){
+    const uid=document.getElementById('modeUid').value.trim();
+    if(uid.length!==32){msg.textContent='私钥应为 32 位';return;}
+    body.bemfaUid=uid;
+  }else{
+    const host=document.getElementById('modeHost').value.trim();
+    const port=parseInt(document.getElementById('modePort').value)||1883;
+    if(!host){msg.textContent='请填写 MQTT 服务器地址';return;}
+    body.mqttHost=host;
+    body.mqttPort=port;
+  }
+
+  const tip=targetMode===0
+    ?'确定切换到巴法云并重启？切换后设备会断开当前连接。'
+    :'确定切换到 Home Assistant 并重启？切换后设备会断开当前连接。';
+  if(!confirm(tip))return;
+
+  msg.textContent='正在保存...';
+  try{
+    const r=await fetch('/api/mode',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(body)
+    });
+    const j=await r.json();
+    if(j.ok){
+      msg.textContent='已保存，设备正在重启并切换到新模式';
+    }else{
+      msg.textContent=j.msg||'保存失败';
+    }
+  }catch(e){
+    msg.textContent='请求失败，请重试';
+  }
 }
 
 function doUpload(){
