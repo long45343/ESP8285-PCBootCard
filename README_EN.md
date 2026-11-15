@@ -2,6 +2,14 @@
 
 A boot card firmware for the ESP8285, compatible with both Bemfa Cloud and Home Assistant (HA). The Home Assistant mode has not been fully tested.
 
+## Live Demo
+
+Not interested in the code? There is a browser-based demo that walks through the setup, login and status pages:
+
+**[Open the live demo](https://long45343.github.io/ESP8285-PCBootCard/)**
+
+The demo is a pure front-end simulation and does not connect to any real device. The panel in the bottom-right corner lets you trigger power on/off and watch the status and logs change.
+
 ## Features
 
 - **Remote power on/off and reset**: Controls Power_SW and Reset_SW remotely, and still works when the PC is frozen

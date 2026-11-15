@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0067C0">
+<title>ESP8285 开机卡 · 在线演示</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 顶部说明 -->
+<div class="demo-banner">
+  <div class="demo-banner-inner">
+    <strong>在线演示</strong>
+    <span>这是纯前端模拟，不连接任何真实设备。右下角面板可以模拟电脑开关机。</span>
+  </div>
+</div>
+
+<!-- 页面切换 -->
+<nav class="demo-nav">
+  <button class="nav-btn active" data-view="setup">配网页面</button>
+  <button class="nav-btn" data-view="login">登录页面</button>
+  <button class="nav-btn" data-view="status">状态页面</button>
+</nav>
+
+<!-- ========== 配网页面 ========== -->
+<div id="view-setup" class="view active">
+  <div class="wrap">
+    <div class="header">
+      <h1>电脑开机卡</h1>
+      <p>ESP8285 · 巴法云 / Home Assistant</p>
+    </div>
+
+    <div class="card">
+      <h2>WiFi 连接</h2>
+      <div class="field">
+        <label for="ssid">网络名称</label>
+        <div class="row">
+          <select id="ssid">
+            <option value="">点右侧按钮扫描</option>
+          </select>
+          <button class="btn-tonal" onclick="scanWifi()">扫描</button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="wifiPass">WiFi 密码</label>
+        <input type="password" id="wifiPass" placeholder="输入密码" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>连接方式</h2>
+      <div class="segmented">
+        <button class="seg active" id="segBemfa" onclick="setMode(0)">巴法云</button>
+        <button class="seg" id="segHa" onclick="setMode(1)">Home Assistant</button>
+      </div>
+
+      <div id="bemfaFields">
+        <div class="field">
+          <label for="uid">私钥（UID）</label>
+          <input type="text" id="uid" placeholder="32 位私钥" maxlength="32" autocomplete="off">
+          <div class="hint">登录巴法云 MQTT 控制台，首页即可看到私钥。三个主题会自动创建。</div>
+        </div>
+      </div>
+
+      <div id="haFields" style="display:none">
+        <div class="field">
+          <label for="mqttHost">MQTT 服务器</label>
+          <input type="text" id="mqttHost" placeholder="例如 192.168.1.100" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="mqttPort">端口</label>
+          <input type="number" id="mqttPort" placeholder="1883" value="1883" inputmode="numeric">
+          <div class="hint">填 Home Assistant 所在机器的地址。设备会自动注册三个实体。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>网页安全</h2>
+      <div class="field">
+        <label for="webPass">网页访问密码</label>
+        <input type="password" id="webPass" placeholder="留空则不设密码" autocomplete="new-password">
+        <div class="hint">设置后，同一局域网打开设备网页需要先输入这个密码。</div>
+      </div>
+    </div>
+
+    <button class="btn" id="saveBtn" onclick="saveSetup()">保存并重启</button>
+    <div class="status" id="setupStatus"></div>
+    <div class="footer">保存后设备会自动重启并连接</div>
+  </div>
+</div>
+
+<!-- ========== 登录页面 ========== -->
+<div id="view-login" class="view">
+  <div class="login-box">
+    <h1>开机卡设置</h1>
+    <p class="sub">请输入网页访问密码</p>
+    <label for="loginPass">密码</label>
+    <input type="password" id="loginPass" autocomplete="current-password" placeholder="演示密码：demo123">
+    <button id="loginBtn" onclick="doLogin()">进入</button>
+    <div class="msg" id="loginMsg"></div>
+    <div class="login-hint">演示密码是 <code>demo123</code></div>
+  </div>
+</div>
+
+<!-- ========== 状态页面 ========== -->
+<div id="view-status" class="view">
+  <div class="wrap">
+    <div class="header">
+      <h1>开机卡设置</h1>
+      <p>ESP8285 · 状态与维护</p>
+    </div>
+
+    <div class="card">
+      <h2>设备状态</h2>
+      <div class="row"><span>WiFi</span><span id="stWifi">-</span></div>
+      <div class="row"><span>信号强度</span><span id="stRssi">-</span></div>
+      <div class="row"><span>IP 地址</span><span id="stIp">-</span></div>
+      <div class="row"><span>MQTT</span><span id="stMqtt">-</span></div>
+      <div class="row"><span>电脑状态</span><span id="stPower">-</span></div>
+      <div class="row"><span>运行时间</span><span id="stUptime">-</span></div>
+      <div class="row"><span>剩余内存</span><span id="stHeap">-</span></div>
+    </div>
+
+    <div class="card">
+      <h2>网络设置</h2>
+      <div class="row"><span>当前网络</span><span id="stSsid">-</span></div>
+      <div class="btns">
+        <button class="btn ghost" id="scanBtn" onclick="doScan()">扫描周围 WiFi</button>
+      </div>
+      <div id="scanList" style="display:none;margin-top:12px">
+        <div id="scanItems"></div>
+      </div>
+      <div id="wifiForm" class="picker" style="display:none">
+        <div class="picker-head">
+          <div class="picker-ssid" id="pickSsid">-</div>
+          <div class="picker-rssi" id="pickRssi">-</div>
+        </div>
+        <input type="password" id="newWifiPass" placeholder="WiFi 密码">
+        <div class="btns">
+          <button class="btn" onclick="doSaveWifi()">连接</button>
+          <button class="btn ghost" onclick="cancelWifi()">取消</button>
+        </div>
+      </div>
+      <div id="wifiMsg" class="msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>网页密码</h2>
+      <div class="field">
+        <label for="oldPass">当前密码</label>
+        <input type="password" id="oldPass" placeholder="没设密码就留空">
+      </div>
+      <div class="field">
+        <label for="newWebPass">新密码</label>
+        <input type="password" id="newWebPass" placeholder="留空表示取消密码">
+      </div>
+      <div class="btns">
+        <button class="btn" onclick="doChangePass()">保存密码</button>
+      </div>
+      <div id="passMsg" class="msg"></div>
+    </div>
+
+    <div class="card">
+      <h2>运行日志</h2>
+      <div id="log">加载中...</div>
+      <div class="btns">
+        <button class="btn ghost" id="pauseBtn" onclick="togglePause()">暂停滚动</button>
+        <button class="btn ghost" onclick="clearLog()">清屏</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>固件升级</h2>
+      <input type="file" id="fw" accept=".bin">
+      <div id="bar"><div id="barInner"></div></div>
+      <div id="msg"></div>
+      <div class="btns">
+        <button class="btn" id="upBtn" onclick="doUpload()">上传并升级</button>
+        <button class="btn ghost" onclick="doRestart()">重启设备</button>
+        <button class="btn ghost" onclick="doLogout()">退出登录</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 模拟设备面板 ========== -->
+<div class="sim-panel collapsed" id="simPanel">
+  <div class="sim-head" onclick="toggleSim()">
+    <span class="sim-dot" id="simDot"></span>
+    <span>模拟设备</span>
+    <span class="sim-arrow" id="simArrow">▾</span>
+  </div>
+  <div class="sim-body" id="simBody">
+    <div class="sim-row">
+      <span>电脑状态</span>
+      <strong id="simPower">关机</strong>
+    </div>
+    <div class="sim-row">
+      <span>按键状态</span>
+      <strong id="simPress">空闲</strong>
+    </div>
+    <div class="sim-btns">
+      <button class="sim-btn" onclick="simAction('on')">开机</button>
+      <button class="sim-btn" onclick="simAction('off')">关机</button>
+      <button class="sim-btn" onclick="simAction('reset')">重启</button>
+    </div>
+    <div class="sim-btns">
+      <button class="sim-btn ghost" onclick="simReset()">重置演示</button>
+    </div>
+    <div class="sim-tip">点上面的按钮，看状态页面和日志怎么变</div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
