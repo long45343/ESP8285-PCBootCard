@@ -53,6 +53,63 @@ arduino-cli compile \
 
 The first flash must be done over USB-to-serial. After that, the firmware supports OTA updates through the web page — just upload a new `.bin` file, no need to open the case again.
 
+## Compatibility
+
+The code is not tied to the ESP8285. How much work it takes to move to another chip depends a lot on which one.
+
+### ESP8266 family: almost no changes
+
+The ESP8285 is essentially an ESP8266 with built-in Flash. Same instruction set, same WiFi stack, same Arduino libraries.
+
+| Module | Flash | Notes |
+|---|---|---|
+| ESP-12F / ESP-12S | 4MB | The most common module, more pins than the 8285 |
+| NodeMCU | 4MB | Dev board with onboard USB-to-serial |
+| Wemos D1 mini | 4MB | Same as above, smaller footprint |
+| ESP-01 / ESP-01S | 1MB | Not recommended — only 2 usable pins, not enough for two optocouplers |
+
+**No code changes needed, only the Flash size in the build settings.** For example, on an ESP-12F:
+
+```
+Flash Size: 4MB (FS:1MB OTA:~1019KB)
+Flash Mode: DOUT
+CPU Frequency: 80MHz
+```
+
+The matching arduino-cli command:
+
+```bash
+arduino-cli compile \
+  --fqbn "esp8266:esp8266:generic:eesz=4M1M" \
+  --output-dir build \
+  .
+```
+
+OTA space grows from 470KB to about 1MB. Note that ESP8266 OTA splits Flash into two firmware slots, so roughly 1MB is the ceiling no matter how large the chip is.
+
+### ESP32 family: a dozen or so changes
+
+The ESP32, ESP32-S2, ESP32-S3, ESP32-C3 and ESP32-C6 all work, but the underlying libraries have different names. These parts need changing:
+
+| Current | On ESP32 |
+|---|---|
+| `ESP8266WiFi.h` | `WiFi.h` |
+| `ESP8266WebServer.h` | `WebServer.h` |
+| `ESP8266mDNS.h` | `ESPmDNS.h` |
+| `Updater.h` | `Update.h` |
+| `EEPROM.h` | `Preferences.h` |
+| `ESP.getChipId()` | `ESP.getEfuseMac()` |
+| `WiFi.scanComplete()` | Not available on ESP32; scanning uses event callbacks |
+
+**Why move to ESP32**: at least 4MB Flash, 520KB RAM (vs 80KB now), plenty of OTA space, and room for features like a buzzer or POST code reading.
+
+**What it costs**: the board has to be redesigned — different pin voltages and packages — and the code takes half a day to port.
+
+### Chips to avoid
+
+- **Other WiFi chips** (BK7231, RTL8710, etc.): Arduino support is incomplete, many libraries won't work, porting means rewriting
+- **Chips without WiFi** (Arduino UNO, STM32): you would need an ESP-01 as a WiFi module, plus a serial protocol between the two chips — several times the work and less reliable
+
 ## WiFi Setup
 
 1. On first power-up, or after holding the onboard button for 3 seconds, the board opens a hotspot named `PCBoot-XXXX`

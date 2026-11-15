@@ -53,6 +53,63 @@ arduino-cli compile \
 
 第一次必须用 USB 转串口线烧录。之后固件支持网页 OTA，可以直接在网页上传新的 `.bin` 升级，不用再拆机箱。
 
+## 兼容其他芯片
+
+代码本身没有绑定 ESP8285，换芯片的难度差别很大。
+
+### ESP8266 系列：几乎不用改
+
+ESP8285 本质上是“内置 Flash 的 ESP8266”，指令集、WiFi 协议栈、Arduino 库完全一样。
+
+| 型号 | Flash | 说明 |
+|---|---|---|
+| ESP-12F / ESP-12S | 4MB | 最常用的模块，引脚比 8285 多 |
+| NodeMCU | 4MB | 开发板形态，自带 USB 转串口 |
+| Wemos D1 mini | 4MB | 同上，体积更小 |
+| ESP-01 / ESP-01S | 1MB | 不推荐，只有 2 个可用引脚，接不了两路光耦 |
+
+**代码一行都不用动，只改编译参数里的 Flash 大小。** 比如换成 ESP-12F：
+
+```
+Flash Size: 4MB (FS:1MB OTA:~1019KB)
+Flash Mode: DOUT
+CPU Frequency: 80MHz
+```
+
+对应的 arduino-cli 参数：
+
+```bash
+arduino-cli compile \
+  --fqbn "esp8266:esp8266:generic:eesz=4M1M" \
+  --output-dir build \
+  .
+```
+
+OTA 空间从 470KB 变成约 1MB。注意 ESP8266 的 OTA 要把 Flash 分成两份固件，上限就是 1MB 左右，再大也上不去了。
+
+### ESP32 系列：要改十几处
+
+ESP32、ESP32-S2、ESP32-S3、ESP32-C3、ESP32-C6 都能跑，但底层库换了名字，需要改这些地方：
+
+| 现在用的 | ESP32 上要换成 |
+|---|---|
+| `ESP8266WiFi.h` | `WiFi.h` |
+| `ESP8266WebServer.h` | `WebServer.h` |
+| `ESP8266mDNS.h` | `ESPmDNS.h` |
+| `Updater.h` | `Update.h` |
+| `EEPROM.h` | `Preferences.h` |
+| `ESP.getChipId()` | `ESP.getEfuseMac()` |
+| `WiFi.scanComplete()` | ESP32 没有这个函数，扫描要用事件回调 |
+
+**换 ESP32 的好处**：Flash 至少 4MB，内存 520KB（现在只有 80KB），OTA 空间充足，还能加蜂鸣器、P80 自检这些功能。
+
+**换 ESP32 的代价**：板子要重新画，引脚电压和封装都不一样，代码要花半天改。
+
+### 不建议的芯片
+
+- **其他 WiFi 芯片**（BK7231、RTL8710 等）：Arduino 支持不完善，很多库用不了，移植等于重写
+- **没有 WiFi 的芯片**（Arduino UNO、STM32）：得外挂 ESP-01 当 WiFi 模块，两个芯片之间还要写串口通信协议，工作量翻好几倍，稳定性也差
+
 ## 配网
 
 1. 第一次上电，或长按板载按键 3 秒，会开一个叫 `PCBoot-XXXX` 的热点
